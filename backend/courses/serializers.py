@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import (
     Course, Test, Question, Choice,
-    TestSubmission, QuestionSubmission, UserReward
+    TestSubmission, QuestionSubmission, UserReward,
+    Enrollment, Payment, Reward, ChatbotInteraction, CourseView
 )
 from accounts.serializers import UserSerializer
 
@@ -35,7 +36,7 @@ class CourseSerializer(serializers.ModelSerializer):
 class CourseViewSerializer(serializers.ModelSerializer):
     class Meta:
         model = CourseView
-        fields = ('id', 'course', 'user', 'ip_address', 'viewed_at', 'duration')
+        fields = ('id', 'user', 'course', 'viewed_at', 'duration')
         read_only_fields = ('id', 'viewed_at')
 
 class ChoiceSerializer(serializers.ModelSerializer):

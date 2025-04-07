@@ -1,45 +1,119 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.contrib.auth.models import AbstractUser
+from django.utils.translation import gettext_lazy as _
+
+class User(AbstractUser):
+    email = models.EmailField(_('email address'), unique=True)
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
+    bio = models.TextField(blank=True)
+    interests = models.JSONField(default=list, blank=True)
+    
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
+
+    def __str__(self):
+        return self.email
 
 class Course(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
-    instructor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    is_paid = models.BooleanField(default=True)
-    thumbnail = models.ImageField(upload_to='course_thumbnails/', null=True, blank=True)
+    thumbnail = models.ImageField(upload_to='course_thumbnails/')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    views = models.IntegerField(default=0)
-    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
-    enrolled_students = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='enrolled_courses', blank=True)
-    category = models.CharField(max_length=100)
-    level = models.CharField(max_length=50)
-    duration = models.DurationField()
-    prerequisites = models.TextField(blank=True)
-    objectives = models.TextField()
-    syllabus = models.TextField()
-    requirements = models.TextField()
-    ai_recommended = models.BooleanField(default=False)
-    ai_recommendation_reason = models.TextField(null=True, blank=True)
+    instructor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='courses')
+    is_published = models.BooleanField(default=False)
+    rating = models.FloatField(default=0.0)
+    total_students = models.IntegerField(default=0)
+    views_count = models.IntegerField(default=0)
+    category = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
         return self.title
 
+class Enrollment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='enrollments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    completed = models.BooleanField(default=False)
+    progress = models.FloatField(default=0.0)
+
     class Meta:
-        app_label = 'courses'
-        ordering = ['-created_at']
+        unique_together = ('user', 'course')
+
+    def __str__(self):
+        return f"{self.user.email} - {self.course.title}"
+
+class Payment(models.Model):
+    PAYMENT_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    PAYMENT_PROVIDER_CHOICES = [
+        ('click', 'Click'),
+        ('payme', 'Payme'),
+        ('uzum', 'Uzum'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
+    provider = models.CharField(max_length=20, choices=PAYMENT_PROVIDER_CHOICES)
+    transaction_id = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.course.title} - {self.amount}"
+
+class Reward(models.Model):
+    REWARD_TYPES = [
+        ('bonus', 'Bonus'),
+        ('certificate', 'Certificate'),
+        ('badge', 'Badge'),
+        ('discount', 'Discount'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='rewards')
+    type = models.CharField(max_length=20, choices=REWARD_TYPES)
+    title = models.CharField(max_length=100)
+    description = models.TextField()
+    value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    is_claimed = models.BooleanField(default=False)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.title}"
+
+class ChatbotInteraction(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chatbot_interactions')
+    message = models.TextField()
+    response = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.created_at}"
 
 class CourseView(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_views')
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='views')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
-    ip_address = models.GenericIPAddressField()
     viewed_at = models.DateTimeField(auto_now_add=True)
-    duration = models.IntegerField(default=0)  # Duration in seconds
+    duration = models.DurationField(null=True, blank=True)
 
     class Meta:
         ordering = ['-viewed_at']
+        unique_together = ('user', 'course')
+
+    def __str__(self):
+        return f"{self.user.email} viewed {self.course.title} at {self.viewed_at}"
 
 class Test(models.Model):
     TEST_TYPE_CHOICES = [

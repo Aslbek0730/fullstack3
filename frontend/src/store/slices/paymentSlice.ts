@@ -1,135 +1,139 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import type { ActionReducerMapBuilder } from '@reduxjs/toolkit';
 import { RootState } from '../store';
+import api from '../../api';
 
-interface Payment {
-  id: number;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-  };
-  course: {
-    id: number;
-    title: string;
-    price: number;
-  };
-  amount: number;
-  currency: string;
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
-  provider: 'click' | 'payme' | 'uzum';
-  transaction_id: string;
-  created_at: string;
-  updated_at: string;
-  fraud_score: number;
-  discount_applied: number;
-  bonus_points: number;
+export type PaymentProvider = 'click' | 'payme' | 'uzum';
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  provider: PaymentProvider;
+  logo: string;
 }
 
-interface UserDiscount {
-  id: number;
-  discount_percentage: number;
-  valid_until: string;
-  is_active: boolean;
-  ai_recommended: boolean;
-  recommendation_reason: string;
+export interface Discount {
+  id: string;
+  code: string;
+  percentage: number;
+  validUntil: string;
+}
+
+export interface Payment {
+  id: string;
+  courseId: string;
+  amount: number;
+  status: 'pending' | 'completed' | 'failed';
+  provider: PaymentProvider;
+  transactionId: string;
+  paymentUrl?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface PaymentState {
-  payments: Payment[];
-  discounts: UserDiscount[];
+  currentPayment: Payment | null;
+  paymentMethods: PaymentMethod[];
+  availableDiscounts: Discount[];
   loading: boolean;
   error: string | null;
-  currentPayment: Payment | null;
 }
 
 const initialState: PaymentState = {
-  payments: [],
-  discounts: [],
+  currentPayment: null,
+  paymentMethods: [
+    {
+      id: 'click',
+      name: 'Click',
+      provider: 'click',
+      logo: '/images/payment/click.png',
+    },
+    {
+      id: 'payme',
+      name: 'Payme',
+      provider: 'payme',
+      logo: '/images/payment/payme.png',
+    },
+    {
+      id: 'uzum',
+      name: 'Uzum Bank',
+      provider: 'uzum',
+      logo: '/images/payment/uzum.png',
+    },
+  ],
+  availableDiscounts: [],
   loading: false,
   error: null,
-  currentPayment: null,
 };
 
 // Async thunks
-export const createPayment = createAsyncThunk(
-  'payments/createPayment',
-  async (paymentData: {
-    course_id: number;
-    provider: string;
-    payment_data: any;
-  }, { rejectWithValue }) => {
-    try {
-      const response = await axios.post('/api/payments/', paymentData);
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to create payment');
-    }
+export const createPayment = createAsyncThunk<
+  Payment,
+  {
+    courseId: number;
+    provider: PaymentProvider;
+    discountCode?: string;
+  },
+  { rejectValue: string }
+>('payment/createPayment', async ({ courseId, provider, discountCode }, { rejectWithValue }) => {
+  try {
+    const response = await api.post('/api/payments/', {
+      course_id: courseId,
+      provider,
+      discount_code: discountCode,
+    });
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to create payment');
   }
-);
+});
 
-export const fetchPayments = createAsyncThunk(
-  'payments/fetchPayments',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get('/api/payments/');
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch payments');
-    }
+export const confirmPayment = createAsyncThunk<
+  Payment,
+  {
+    paymentId: string;
+    transactionId: string;
+  },
+  { rejectValue: string }
+>('payment/confirmPayment', async ({ paymentId, transactionId }, { rejectWithValue }) => {
+  try {
+    const response = await api.post(`/api/payments/${paymentId}/confirm/`, {
+      transaction_id: transactionId,
+    });
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to confirm payment');
   }
-);
+});
 
-export const fetchDiscounts = createAsyncThunk(
-  'payments/fetchDiscounts',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get('/api/payments/discounts/');
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch discounts');
-    }
+export const fetchDiscounts = createAsyncThunk<
+  Discount[],
+  number,
+  { rejectValue: string }
+>('payment/fetchDiscounts', async (courseId, { rejectWithValue }) => {
+  try {
+    const response = await api.get(`/api/courses/${courseId}/discounts/`);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to fetch discounts');
   }
-);
-
-export const confirmPayment = createAsyncThunk(
-  'payments/confirmPayment',
-  async (paymentId: number, { rejectWithValue }) => {
-    try {
-      const response = await axios.post(`/api/payments/${paymentId}/confirm/`);
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to confirm payment');
-    }
-  }
-);
-
-export const failPayment = createAsyncThunk(
-  'payments/failPayment',
-  async ({ paymentId, errorMessage }: { paymentId: number; errorMessage: string }, { rejectWithValue }) => {
-    try {
-      const response = await axios.post(`/api/payments/${paymentId}/fail/`, { error_message: errorMessage });
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to mark payment as failed');
-    }
-  }
-);
+});
 
 const paymentSlice = createSlice({
-  name: 'payments',
+  name: 'payment',
   initialState,
   reducers: {
+    clearPayment: (state) => {
+      state.currentPayment = null;
+      state.error = null;
+    },
     clearError: (state) => {
       state.error = null;
     },
-    setCurrentPayment: (state, action) => {
-      state.currentPayment = action.payload;
-    },
   },
-  extraReducers: (builder) => {
+  extraReducers: (builder: ActionReducerMapBuilder<PaymentState>) => {
     builder
-      // Create Payment
+      // Create payment
       .addCase(createPayment.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -137,78 +141,47 @@ const paymentSlice = createSlice({
       .addCase(createPayment.fulfilled, (state, action) => {
         state.loading = false;
         state.currentPayment = action.payload;
-        state.payments.push(action.payload);
       })
       .addCase(createPayment.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
-      // Fetch Payments
-      .addCase(fetchPayments.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchPayments.fulfilled, (state, action) => {
-        state.loading = false;
-        state.payments = action.payload;
-      })
-      .addCase(fetchPayments.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
-      // Fetch Discounts
-      .addCase(fetchDiscounts.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchDiscounts.fulfilled, (state, action) => {
-        state.loading = false;
-        state.discounts = action.payload;
-      })
-      .addCase(fetchDiscounts.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
-      // Confirm Payment
+      // Confirm payment
       .addCase(confirmPayment.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(confirmPayment.fulfilled, (state, action) => {
         state.loading = false;
-        if (state.currentPayment) {
-          state.currentPayment.status = 'completed';
-        }
+        state.currentPayment = action.payload;
       })
       .addCase(confirmPayment.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
-      // Fail Payment
-      .addCase(failPayment.pending, (state) => {
+      // Fetch discounts
+      .addCase(fetchDiscounts.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(failPayment.fulfilled, (state, action) => {
+      .addCase(fetchDiscounts.fulfilled, (state, action) => {
         state.loading = false;
-        if (state.currentPayment) {
-          state.currentPayment.status = 'failed';
-        }
+        state.availableDiscounts = action.payload;
       })
-      .addCase(failPayment.rejected, (state, action) => {
+      .addCase(fetchDiscounts.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });
   },
 });
 
-export const { clearError, setCurrentPayment } = paymentSlice.actions;
-
 // Selectors
-export const selectPayments = (state: RootState) => state.payments.payments;
-export const selectDiscounts = (state: RootState) => state.payments.discounts;
-export const selectCurrentPayment = (state: RootState) => state.payments.currentPayment;
-export const selectLoading = (state: RootState) => state.payments.loading;
-export const selectError = (state: RootState) => state.payments.error;
+export const selectCurrentPayment = (state: RootState) => state.payment.currentPayment;
+export const selectPaymentMethods = (state: RootState) => state.payment.paymentMethods;
+export const selectAvailableDiscounts = (state: RootState) => state.payment.availableDiscounts;
+export const selectLoading = (state: RootState) => state.payment.loading;
+export const selectError = (state: RootState) => state.payment.error;
+
+export const { clearPayment, clearError } = paymentSlice.actions;
 
 export default paymentSlice.reducer; 

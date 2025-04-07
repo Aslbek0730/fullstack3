@@ -128,6 +128,25 @@ class CourseViewSet(viewsets.ModelViewSet):
         levels = Course.objects.values_list('level', flat=True).distinct()
         return Response(list(levels))
 
+    @action(detail=True, methods=['post'])
+    def view(self, request, pk=None):
+        course = self.get_object()
+        duration = request.data.get('duration', None)
+        
+        # Create or update course view
+        course_view, created = CourseView.objects.get_or_create(
+            user=request.user,
+            course=course,
+            defaults={'duration': duration}
+        )
+        
+        if not created and duration:
+            course_view.duration = duration
+            course_view.save()
+        
+        serializer = CourseViewSerializer(course_view)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 class TestViewSet(viewsets.ModelViewSet):
     queryset = Test.objects.all()
     serializer_class = TestSerializer

@@ -1,24 +1,28 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { RootState } from '../store';
+import api from '../../api';
 
-interface Reward {
+export interface Reward {
   id: number;
-  reward_type: string;
-  reward_value: string;
-  awarded_at: string;
+  type: 'bonus' | 'certificate' | 'badge' | 'discount';
+  title: string;
+  description: string;
+  value: number;
+  awardedAt: string;
+  expiresAt?: string;
 }
 
-interface Recommendation {
+export interface Recommendation {
   id: number;
-  course_id: number;
-  course_title: string;
-  difficulty_level: string;
+  type: 'course' | 'exercise' | 'practice';
+  title: string;
+  description: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
   reason: string;
-  confidence_score: number;
+  score: number;
 }
 
-interface RewardState {
+export interface RewardState {
   rewards: Reward[];
   recommendations: Recommendation[];
   loading: boolean;
@@ -33,11 +37,11 @@ const initialState: RewardState = {
 };
 
 // Async thunks
-export const fetchUserRewards = createAsyncThunk(
-  'rewards/fetchUserRewards',
+export const fetchRewards = createAsyncThunk(
+  'reward/fetchRewards',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get('/api/rewards/');
+      const response = await api.get('/api/rewards/');
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || 'Failed to fetch rewards');
@@ -46,10 +50,10 @@ export const fetchUserRewards = createAsyncThunk(
 );
 
 export const fetchRecommendations = createAsyncThunk(
-  'rewards/fetchRecommendations',
+  'reward/fetchRecommendations',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get('/api/rewards/recommendations/');
+      const response = await api.get('/api/recommendations/');
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || 'Failed to fetch recommendations');
@@ -57,29 +61,43 @@ export const fetchRecommendations = createAsyncThunk(
   }
 );
 
+export const claimReward = createAsyncThunk(
+  'reward/claimReward',
+  async (rewardId: number, { rejectWithValue }) => {
+    try {
+      const response = await api.post(`/api/rewards/${rewardId}/claim/`);
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || 'Failed to claim reward');
+    }
+  }
+);
+
 const rewardSlice = createSlice({
-  name: 'rewards',
+  name: 'reward',
   initialState,
   reducers: {
-    clearError: (state) => {
+    clearRewards: (state) => {
+      state.rewards = [];
+      state.recommendations = [];
       state.error = null;
     },
-    addReward: (state, action) => {
-      state.rewards.unshift(action.payload);
+    clearError: (state) => {
+      state.error = null;
     },
   },
   extraReducers: (builder) => {
     builder
-      // Fetch User Rewards
-      .addCase(fetchUserRewards.pending, (state) => {
+      // Fetch Rewards
+      .addCase(fetchRewards.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchUserRewards.fulfilled, (state, action) => {
+      .addCase(fetchRewards.fulfilled, (state, action) => {
         state.loading = false;
         state.rewards = action.payload;
       })
-      .addCase(fetchUserRewards.rejected, (state, action) => {
+      .addCase(fetchRewards.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
@@ -95,16 +113,23 @@ const rewardSlice = createSlice({
       .addCase(fetchRecommendations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      // Claim Reward
+      .addCase(claimReward.fulfilled, (state, action) => {
+        const index = state.rewards.findIndex((reward) => reward.id === action.payload.id);
+        if (index !== -1) {
+          state.rewards[index] = action.payload;
+        }
       });
   },
 });
 
-export const { clearError, addReward } = rewardSlice.actions;
-
 // Selectors
-export const selectRewards = (state: RootState) => state.rewards.rewards;
-export const selectRecommendations = (state: RootState) => state.rewards.recommendations;
-export const selectLoading = (state: RootState) => state.rewards.loading;
-export const selectError = (state: RootState) => state.rewards.error;
+export const selectRewards = (state: RootState) => state.reward.rewards;
+export const selectRecommendations = (state: RootState) => state.reward.recommendations;
+export const selectRewardLoading = (state: RootState) => state.reward.loading;
+export const selectRewardError = (state: RootState) => state.reward.error;
+
+export const { clearRewards, clearError } = rewardSlice.actions;
 
 export default rewardSlice.reducer; 

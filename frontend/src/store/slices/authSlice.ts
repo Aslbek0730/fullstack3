@@ -43,9 +43,35 @@ export const login = createAsyncThunk(
   }
 )
 
+export const googleLogin = createAsyncThunk(
+  'auth/googleLogin',
+  async (token: string, { rejectWithValue }) => {
+    try {
+      const response = await axios.post('/api/auth/google/', { token })
+      localStorage.setItem('token', response.data.token)
+      return response.data
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || 'Google login failed')
+    }
+  }
+)
+
+export const facebookLogin = createAsyncThunk(
+  'auth/facebookLogin',
+  async (token: string, { rejectWithValue }) => {
+    try {
+      const response = await axios.post('/api/auth/facebook/', { token })
+      localStorage.setItem('token', response.data.token)
+      return response.data
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data || 'Facebook login failed')
+    }
+  }
+)
+
 export const register = createAsyncThunk(
   'auth/register',
-  async (userData: { username: string; email: string; password: string }, { rejectWithValue }) => {
+  async (userData: { name: string; email: string; password: string }, { rejectWithValue }) => {
     try {
       const response = await axios.post('/api/auth/register/', userData)
       localStorage.setItem('token', response.data.token)
@@ -58,6 +84,7 @@ export const register = createAsyncThunk(
 
 export const logout = createAsyncThunk('auth/logout', async () => {
   localStorage.removeItem('token')
+  localStorage.removeItem('user')
 })
 
 export const getCurrentUser = createAsyncThunk(
@@ -97,6 +124,36 @@ const authSlice = createSlice({
         state.loading = false
         state.error = action.payload as string
       })
+      // Google Login
+      .addCase(googleLogin.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(googleLogin.fulfilled, (state, action) => {
+        state.loading = false
+        state.isAuthenticated = true
+        state.user = action.payload.user
+        state.token = action.payload.token
+      })
+      .addCase(googleLogin.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
+      // Facebook Login
+      .addCase(facebookLogin.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(facebookLogin.fulfilled, (state, action) => {
+        state.loading = false
+        state.isAuthenticated = true
+        state.user = action.payload.user
+        state.token = action.payload.token
+      })
+      .addCase(facebookLogin.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload as string
+      })
       // Register
       .addCase(register.pending, (state) => {
         state.loading = true
@@ -131,6 +188,7 @@ const authSlice = createSlice({
       .addCase(getCurrentUser.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload as string
+        state.isAuthenticated = false
       })
   },
 })

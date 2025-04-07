@@ -1,75 +1,68 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import type { ActionReducerMapBuilder } from '@reduxjs/toolkit';
 import { RootState } from '../store';
+import api from '../../api';
 
-interface Course {
+export interface Course {
   id: number;
   title: string;
   description: string;
-  thumbnail: string;
   price: number;
+  thumbnail: string;
   instructor: {
     id: number;
-    username: string;
-    first_name: string;
-    last_name: string;
-    avatar?: string;
+    name: string;
+    avatar: string;
   };
-  category: string;
-  level: string;
-  duration: string;
   rating: number;
-  enrolled_students: number;
-  is_enrolled: boolean;
-  view_count: number;
-  objectives: string;
-  requirements: string;
-  syllabus: Array<{
-    title: string;
-    description: string;
-  }>;
+  totalStudents: number;
+  isPurchased: boolean;
+  createdAt: string;
 }
 
 interface CourseState {
   courses: Course[];
-  currentCourse: Course | null;
   popularCourses: Course[];
   recommendedCourses: Course[];
-  categories: string[];
-  levels: string[];
+  currentCourse: Course | null;
   loading: boolean;
   error: string | null;
+  sortBy: 'popularity' | 'rating' | 'newest' | 'price';
+  userInterests: string[];
+  purchasedCourses: Course[];
 }
 
 const initialState: CourseState = {
   courses: [],
-  currentCourse: null,
   popularCourses: [],
   recommendedCourses: [],
-  categories: [],
-  levels: [],
+  currentCourse: null,
   loading: false,
   error: null,
+  sortBy: 'popularity',
+  userInterests: [],
+  purchasedCourses: [],
 };
 
 // Async thunks
-export const fetchCourses = createAsyncThunk(
-  'courses/fetchCourses',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get('/api/courses/');
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch courses');
-    }
+export const fetchCourses = createAsyncThunk<
+  Course[],
+  void,
+  { rejectValue: string }
+>('courses/fetchCourses', async (_, { rejectWithValue }) => {
+  try {
+    const response = await api.get('/api/courses/');
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to fetch courses');
   }
-);
+});
 
 export const fetchCourseDetails = createAsyncThunk(
   'courses/fetchCourseDetails',
   async (courseId: number, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`/api/courses/${courseId}/`);
+      const response = await api.get(`/api/courses/${courseId}/`);
       return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data || 'Failed to fetch course details');
@@ -77,53 +70,83 @@ export const fetchCourseDetails = createAsyncThunk(
   }
 );
 
-export const fetchPopularCourses = createAsyncThunk(
-  'courses/fetchPopularCourses',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get('/api/courses/popular/');
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch popular courses');
-    }
+export const fetchPopularCourses = createAsyncThunk<
+  Course[],
+  void,
+  { rejectValue: string }
+>('courses/fetchPopularCourses', async (_, { rejectWithValue }) => {
+  try {
+    const response = await api.get('/api/courses/popular/');
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to fetch popular courses');
   }
-);
+});
 
-export const fetchRecommendedCourses = createAsyncThunk(
-  'courses/fetchRecommendedCourses',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get('/api/courses/recommended/');
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch recommended courses');
-    }
+export const fetchRecommendedCourses = createAsyncThunk<
+  Course[],
+  void,
+  { rejectValue: string }
+>('courses/fetchRecommendedCourses', async (_, { rejectWithValue }) => {
+  try {
+    const response = await api.get('/api/courses/recommended/');
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to fetch recommended courses');
   }
-);
+});
 
-export const fetchCategories = createAsyncThunk(
-  'courses/fetchCategories',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get('/api/courses/categories/');
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch categories');
-    }
+export const fetchCourseById = createAsyncThunk<
+  Course,
+  number,
+  { rejectValue: string }
+>('courses/fetchCourseById', async (courseId, { rejectWithValue }) => {
+  try {
+    const response = await api.get(`/api/courses/${courseId}/`);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to fetch course details');
   }
-);
+});
 
-export const fetchLevels = createAsyncThunk(
-  'courses/fetchLevels',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await axios.get('/api/courses/levels/');
-      return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch levels');
-    }
+export const fetchPurchasedCourses = createAsyncThunk<
+  Course[],
+  void,
+  { rejectValue: string }
+>('courses/fetchPurchasedCourses', async (_, { rejectWithValue }) => {
+  try {
+    const response = await api.get('/api/courses/purchased/');
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to fetch purchased courses');
   }
-);
+});
+
+export const recordCourseView = createAsyncThunk<
+  number,
+  number,
+  { rejectValue: string }
+>('courses/recordCourseView', async (courseId, { rejectWithValue }) => {
+  try {
+    await api.post(`/api/courses/${courseId}/view/`);
+    return courseId;
+  } catch (error) {
+    return rejectWithValue('Failed to record course view');
+  }
+});
+
+export const updateUserInterests = createAsyncThunk<
+  { interests: string[] },
+  string[],
+  { rejectValue: string }
+>('courses/updateUserInterests', async (interests, { rejectWithValue }) => {
+  try {
+    const response = await api.put('/api/users/interests/', { interests });
+    return response.data;
+  } catch (error) {
+    return rejectWithValue('Failed to update user interests');
+  }
+});
 
 const courseSlice = createSlice({
   name: 'courses',
@@ -135,8 +158,29 @@ const courseSlice = createSlice({
     setCurrentCourse: (state, action) => {
       state.currentCourse = action.payload;
     },
+    setSortBy: (state, action: PayloadAction<CourseState['sortBy']>) => {
+      state.sortBy = action.payload;
+      // Sort courses based on the selected criteria
+      state.courses = [...state.courses].sort((a, b) => {
+        switch (state.sortBy) {
+          case 'popularity':
+            return b.totalStudents - a.totalStudents;
+          case 'rating':
+            return b.rating - a.rating;
+          case 'newest':
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          case 'price':
+            return a.price - b.price;
+          default:
+            return 0;
+        }
+      });
+    },
+    setUserInterests: (state, action) => {
+      state.userInterests = action.payload;
+    },
   },
-  extraReducers: (builder) => {
+  extraReducers: (builder: ActionReducerMapBuilder<CourseState>) => {
     builder
       // Fetch Courses
       .addCase(fetchCourses.pending, (state) => {
@@ -190,45 +234,57 @@ const courseSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      // Fetch Categories
-      .addCase(fetchCategories.pending, (state) => {
+      // Fetch Course by ID
+      .addCase(fetchCourseById.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchCategories.fulfilled, (state, action) => {
+      .addCase(fetchCourseById.fulfilled, (state, action) => {
         state.loading = false;
-        state.categories = action.payload;
+        state.currentCourse = action.payload;
       })
-      .addCase(fetchCategories.rejected, (state, action) => {
+      .addCase(fetchCourseById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
-      // Fetch Levels
-      .addCase(fetchLevels.pending, (state) => {
+      // Fetch Purchased Courses
+      .addCase(fetchPurchasedCourses.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchLevels.fulfilled, (state, action) => {
+      .addCase(fetchPurchasedCourses.fulfilled, (state, action) => {
         state.loading = false;
-        state.levels = action.payload;
+        state.purchasedCourses = action.payload;
       })
-      .addCase(fetchLevels.rejected, (state, action) => {
+      .addCase(fetchPurchasedCourses.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      // Record Course View
+      .addCase(recordCourseView.fulfilled, (state, action) => {
+        const course = state.courses.find((c) => c.id === action.payload);
+        if (course) {
+          course.totalStudents += 1;
+        }
+      })
+      // Update User Interests
+      .addCase(updateUserInterests.fulfilled, (state, action) => {
+        state.userInterests = action.payload.interests;
       });
   },
 });
 
-export const { clearError, setCurrentCourse } = courseSlice.actions;
+export const { clearError, setCurrentCourse, setSortBy, setUserInterests } = courseSlice.actions;
 
 // Selectors
-export const selectCourses = (state: RootState) => state.courses.courses;
+export const selectAllCourses = (state: RootState) => state.courses.courses;
 export const selectCurrentCourse = (state: RootState) => state.courses.currentCourse;
 export const selectPopularCourses = (state: RootState) => state.courses.popularCourses;
 export const selectRecommendedCourses = (state: RootState) => state.courses.recommendedCourses;
-export const selectCategories = (state: RootState) => state.courses.categories;
-export const selectLevels = (state: RootState) => state.courses.levels;
+export const selectPurchasedCourses = (state: RootState) => state.courses.purchasedCourses;
 export const selectLoading = (state: RootState) => state.courses.loading;
 export const selectError = (state: RootState) => state.courses.error;
+export const selectSortBy = (state: RootState) => state.courses.sortBy;
+export const selectUserInterests = (state: RootState) => state.courses.userInterests;
 
 export default courseSlice.reducer; 
